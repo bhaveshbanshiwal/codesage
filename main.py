@@ -21,24 +21,39 @@ st.markdown(
     <style>
         [data-testid="stSidebar"] {
             order: 2;
+            idth: 400px !important;
+        }
+        [data-testid="stAppViewBlocker"] {
+            display: none;
         }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-last = None
+st.markdown(
+    """
+    <style>
+        /* This css selector targets the screen blocker that appears during a rerun */
+        [data-testid="stAppViewBlocker"] {
+            display: none;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
+
+last = None
+suggest = ""
 # f = open('gemini_api.pkl', 'rb')
 # MY_API_KEY = pickle.load(f)
 # f.close()
-MY_API_KEY = 'AIzaSyDJnM1pk0B24R9dHGKgc_xHhoa8u4GCA-o'
+MY_API_KEY = 'AIzaSyBsqH6cJ2Uj8wLvvnTs0d8nLEx-iFO7U-I'
 genai.configure(api_key=MY_API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
 
-# ft = open('topics.bin', 'rb')
-# topics = pickle.load(ft)
-# ft.close()
+code = ""
 
 f = open('exception_commands.bin', 'rb')
 VULN_KEYS = pickle.load(f)
@@ -201,6 +216,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "code_content" not in st.session_state:
     st.session_state.code_content = ""
+else:
+    code = st.session_state.code_content
 if "problems" not in st.session_state:
     st.session_state.problems = load_problems()
 if "current_problem" not in st.session_state:
@@ -210,10 +227,12 @@ if "test_results" not in st.session_state:
 if "level" not in st.session_state:
     st.session_state.level = 1
 if "remaining_questions" not in st.session_state:
-    st.session_state.remaining_questions = 3
+    st.session_state.remaining_questions = 4
 if "score" not in st.session_state:
     st.session_state.score = []
 if "performance_data" not in st.session_state: st.session_state.performance_data = []
+if "shown" not in st.session_state:
+    st.session_state.shown = False
 
 st.markdown("Welcome, to the AI Technical Interviewer! Please select your preferred programming language (e.g., 'Python' or 'C++') to begin.")
 
@@ -223,16 +242,6 @@ if st.session_state.current_problem:
     st.sidebar.markdown(f"**Difficulty: {problem.get('difficulty', 'N/A')}**")
     st.sidebar.markdown(problem.get('problemDescription', '...'))
     st.sidebar.divider()
-
-if st.session_state.test_results:
-    st.sidebar.header("Test Results")
-    results = st.session_state.test_results
-    for i, result in enumerate(results['details']):
-        status = "✅ Passed" if result['correct'] else "❌ Failed"
-        st.sidebar.markdown(f"**Test Case {i+1}: {status}**")
-        with st.sidebar.expander("Details"):
-            st.code(f"Input:\n{result['input']}\n\nYour Output:\n{result['output']}\n\nExpected Output:\n{result['expected']}", language='text')
-    st.sidebar.subheader(f"Score: {results['score']}/10")
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -302,17 +311,6 @@ if prompt := st.chat_input(chat_placeholder, disabled=interview_over):
         st.session_state.messages.append({"role": "assistant", "content": "Please use the code editor on the right to solve the problem. If you need help, you can click 'Get a Hint'."})
         st.rerun()
 
-
-if st.session_state.test_results:
-    st.sidebar.header("Test Results")
-    results = st.session_state.test_results
-    for i, result in enumerate(results['details']):
-        status = "✅ Passed" if result['correct'] else "❌ Failed"
-        st.sidebar.markdown(f"**Test Case {i+1}: {status}**")
-        with st.sidebar.expander("Details"):
-            st.code(f"Input:\n{result['input']}\n\nYour Output:\n{result['output']}\n\nExpected Output:\n{result['expected']}", language='text')
-    st.sidebar.subheader(f"Score: {results['score']}/10")
-
 if st.session_state.current_problem:
 
     st.header("Your Solution")
@@ -336,6 +334,7 @@ if st.session_state.current_problem:
     )
     # Keeping edior content in sync
     st.session_state.code_content = code_input
+
 
     col1, col2, col3 = st.columns([1, 1, 3])
     with col1:
@@ -399,46 +398,29 @@ if st.session_state.current_problem:
                 st.session_state.last_checked_code = ""
                 st.rerun()
 
+    if st.session_state.test_results:
+        st.sidebar.header("Test Results")
+        results = st.session_state.test_results
+        for i, result in enumerate(results['details']):
+            status = "✅ Passed" if result['correct'] else "❌ Failed"
+            st.sidebar.markdown(f"**Test Case {i+1}: {status}**")
+            with st.sidebar.expander("Details"):
+                st.code(f"Input:\n{result['input']}\n\nYour Output:\n{result['output']}\n\nExpected Output:\n{result['expected']}", language='text')
+        st.sidebar.subheader(f"Score: {results['score']}/10")
 
-def monitoring_bot():
-    while True:
-        time.sleep(7) # Check every 7 seconds
-        if st.session_state.current_problem is not None:
-            current_problem = st.session_state.current_problem['problemDescription'] if st.session_state.current_problem else None
-            code_content = st.session_state.code_content
-            global last
-            if last == None:
-                last = code_content
-            elif code_content != last:
-                st.session_state.last_checked_code = code_content
-                
 
-                intervention_prompt = f"""
-                You are an AI programming interviewer observing a candidate solve a problem in real-time.
-                Problem: {current_problem['problemDescription']}
-                Candidate's current code (may be incomplete): {code_content}
-
-                Your role is to intervene ONLY if the candidate's core logic or approach is fundamentally wrong.
-                - If you see a syntax error, really minor mistake, or a small bug, do NOT intervene, and if major syntax error then intervene ASAP.
-                - Ignore if u feel syntax error is due to incomplete code.
-                - If the approach is viable or it's too early to tell, respond with ONLY: NO_INTERVENTION
-                - If the approach is clearly flawed, provide a short, guiding question to prompt them to rethink.
-                - Do NOT correct syntax. Do NOT give code. Be subtle and encouraging.
-                """
-                
-                intervention = model.generate_content(intervention_prompt)
-                print("Intervention check:", intervention.text)
-
-                if intervention and "NO_INTERVENTION" not in intervention:
-                    print("Intervention needed:", intervention)
-                    st.session_state.messages.append({"role": "assistant", "content": intervention.text})
-                    st.session_state.intervention_message = intervention
+    
+# def monitoring_bot():
+#     while True:
+#         time.sleep(10) 
+#         answer = model.generate_content(f"Is this code (python or cpp) Rubbish strictly answer 0 followed by suggestion, else return 1 only and also if code is empty then return 1 nothing else\n{code}").text
+#         if answer[0] == '0':
+#             suggest = answer[1:]
         
 
-if __name__ == '__main__':
-
-    st.session_state.thread_started = True
-    # daemon thread so that it stops when main app stops
-    thread = threading.Thread(target=monitoring_bot, daemon=True)
-    thread.start()
-    print("🚀 Background thread started.")
+# if __name__ == '__main__':
+#     st.session_state.thread_started = True
+#     # daemon thread so that it stops when main app stops
+#     thread = threading.Thread(target=monitoring_bot, daemon=True)
+#     thread.start()
+#     print("🚀 Background thread started.")
