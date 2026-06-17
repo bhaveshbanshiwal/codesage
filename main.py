@@ -21,7 +21,7 @@ st.markdown(
     <style>
         [data-testid="stSidebar"] {
             order: 2;
-            idth: 400px !important;
+            width: 400px !important;
         }
         [data-testid="stAppViewBlocker"] {
             display: none;
@@ -257,10 +257,10 @@ st.session_state.lang_chosen = False
 interview_over = st.session_state.remaining_questions <= 0
 chat_placeholder = "Interview finished. Refresh to start a new one." if interview_over else "Your response..."
 if interview_over:
-    # one time run onyl
+    # one time run only
     if 'report_generated' not in st.session_state:
         st.session_state.report_generated = True
-        st.session_state.current_problem = None # removr the final problem from the sidebar
+        st.session_state.current_problem = None # remove the final problem from the sidebar
         
         total_score = sum(st.session_state.score)
         st.session_state.messages.append({"role": "assistant", "content": f"Interview Over! Your total SCORE is {total_score}."})
